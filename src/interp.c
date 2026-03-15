@@ -6,6 +6,17 @@
 #include <math.h>
 #include "lang.h"
 
+//#define ERR_NONE
+
+#ifdef ERR_VERBOSE
+    #define errout(...) printf(__VA_ARGS__)    
+#elifdef ERR_NONE
+    #define errout(...) 
+#else
+    #define errout(...) printf("ERROR")    
+#endif
+
+
 
 expr parse_function(code_block* b, string ident);
 expr call_func(func *func, expr* args, size_t arg_count);
@@ -91,7 +102,7 @@ expr parse_literal(code_block* b){
         while(isdigit(peek(b))){
             num = (num * 10) + (eat(b) - '0');
             if(num < 0){ 
-                printf("ERROR: Int too large.\n");
+                errout("ERROR: Int too large.\n");
                 ex.type = VAR_ERROR;
                 return ex;
                 //static overflow, throw error
@@ -115,13 +126,13 @@ expr parse_literal(code_block* b){
                 
                 f = f + v;
                 if(f > 1){
-                    printf("ERROR: Float too large.\n");
+                    errout("ERROR: Float too large.\n");
                     ex.type = VAR_ERROR;
                     return ex;
                 }
             }
             if(peek(b) != 'f'){
-                printf("ERROR: Expected 'f' at end of float.\n");
+                errout("ERROR: Expected 'f' at end of float.\n");
                 ex.type = VAR_ERROR;
                 return ex;
             }
@@ -144,7 +155,7 @@ expr parse_literal(code_block* b){
         int i = 0;
         while(b->body.value[b->body_index] != '\"'){
             if(i >= 2048){
-                printf("ERROR: String must not exceed 2048 characters.\n");
+                errout("ERROR: String must not exceed 2048 characters.\n");
                 ex.type = VAR_ERROR;
                 return ex;
             }
@@ -152,7 +163,7 @@ expr parse_literal(code_block* b){
         }
 
         if(eat(b) != '\"'){
-            printf("ERROR: Invalid string literal.\n");
+            errout("ERROR: Invalid string literal.\n");
             ex.type = VAR_ERROR;
             return ex;
         }
@@ -173,13 +184,13 @@ expr parse_literal(code_block* b){
         }
         else{
             //handle escape characters
-            printf("ERROR: Invalid escape char.\n");
+            errout("ERROR: Invalid escape char.\n");
             ex.type = VAR_ERROR;
             return ex;
         }
 
         if(eat(b) != '\''){
-            printf("ERROR: Invalid char literal.\n");
+            errout("ERROR: Invalid char literal.\n");
             ex.type = VAR_ERROR;
             return ex;
         }
@@ -207,7 +218,7 @@ expr parse_literal(code_block* b){
         return ex;
     }
     
-    printf("ERROR: Invalid literal '%s'.\n",scan(b));
+    errout("ERROR: Invalid literal '%s'.\n",scan(b));
     ex.type = VAR_ERROR;
     return ex;
 }
@@ -249,7 +260,7 @@ expr parse_binary(code_block* b, int min_prec){
             break;
         
         default:
-            printf("ERROR: Invalid unary operator. Valid values are '-' and '+'.\n");
+            errout("ERROR: Invalid unary operator. Valid values are '-' and '+'.\n");
             lhs.type = VAR_ERROR;
             return lhs;
         }
@@ -258,7 +269,7 @@ expr parse_binary(code_block* b, int min_prec){
         eat(b);
         lhs = parse_binary(b, 0);
         if(eat(b) != ')'){
-            printf("ERROR: unclosed brackets.\n");
+            errout("ERROR: unclosed brackets.\n");
             lhs.type = VAR_ERROR;
             return lhs;
         }
@@ -309,7 +320,7 @@ expr parse_binary(code_block* b, int min_prec){
                         rhs.type = VAR_INT;
                     }
                     else{
-                        printf("ERROR: Could not cast value to int.\n");
+                        errout("ERROR: Could not cast value to int.\n");
                         lhs.type = VAR_ERROR;
                         return lhs;
                     }
@@ -341,7 +352,7 @@ expr parse_binary(code_block* b, int min_prec){
                         rhs.type = VAR_FLOAT;
                     }
                     else{
-                        printf("ERROR: Could not cast value to float.\n");
+                        errout("ERROR: Could not cast value to float.\n");
                         lhs.type = VAR_ERROR;
                         return lhs;
                     }
@@ -394,7 +405,7 @@ expr parse_binary(code_block* b, int min_prec){
                         break;
 
                         default:
-                            printf("ERROR: Could not convert value to string.\n");
+                            errout("ERROR: Could not convert value to string.\n");
                             lhs.type = VAR_ERROR;
                             return lhs;
                     }
@@ -410,7 +421,7 @@ expr parse_binary(code_block* b, int min_prec){
                     lhs.svalue = (string){(lhs.svalue.length+rhs.svalue.length),ns};                    
                 }
                 else{
-                    printf("ERROR: Invalid Operation.\n");
+                    errout("ERROR: Invalid Operation.\n");
                     lhs.type = VAR_ERROR;
                     return lhs;
                 }
@@ -459,7 +470,7 @@ expr parse_function(code_block* b, string ident){
 
     if(eat(b) != '('){
         ret.type = VAR_ERROR;
-        printf("ERROR: No opening paren for function.\n");
+        errout("ERROR: No opening paren for function.\n");
         return ret;
     }
     while (peek(b) != ')')
@@ -470,7 +481,7 @@ expr parse_function(code_block* b, string ident){
         }
         if(peek(b) != ','){
             ret.type = VAR_ERROR;
-            printf("ERROR: invalid parameters in function.\n");
+            errout("ERROR: invalid parameters in function.\n");
             return ret;
         }
         //parse operands
@@ -482,7 +493,7 @@ expr parse_function(code_block* b, string ident){
 
     if(fn->ident.length != ident.length){
         ret.type = VAR_ERROR;
-        printf("ERROR: invalid function.\n");
+        errout("ERROR: Invalid function.\n");
         return ret;
     }
 
@@ -555,7 +566,7 @@ int parse_expression(code_block* b){
                             return 1;
                         }
                         else{
-                            printf("ERROR: Invalid return type.\n");
+                            errout("ERROR: Invalid return type.\n");
                             return -1;
                         }
                         break;
@@ -567,7 +578,7 @@ int parse_expression(code_block* b){
                     break;
                 }
                 //invalid statement
-                printf("ERROR: Invalid expression.\n");
+                errout("ERROR: Invalid expression.\n");
                 return -1;
             }
         }
@@ -599,7 +610,7 @@ int parse_statement(code_block* b){
         return r;
     }
     else{
-        printf("ERROR: Missing Semicolon.\n");
+        errout("ERROR: Missing Semicolon.\n");
         return -1;
     }
 
@@ -621,9 +632,9 @@ int run(code_block *b){
     b->brackets = 1;
     while(b->body_index < b->body.length && b->brackets > 0){
         if(parse_statement(b) < 0){ //error
-            printf("ERROR: Invalid Statement.\n");
-            clean_block(b);
-            return -1;
+            //printf("ERROR: Invalid Statement.\n");
+            //clean_block(b);
+            //return -1;
         }
     }
     clean_block(b);
@@ -636,7 +647,7 @@ expr call_func(func *func, expr* args, size_t arg_count){
 
 
     if(arg_count != func->arg_count){
-        printf("ERROR: Incorrect number of arguments in function.\n");
+        errout("ERROR: Incorrect number of arguments in function.\n");
         expr err;
         err.type = VAR_ERROR;
         return err;
@@ -645,7 +656,7 @@ expr call_func(func *func, expr* args, size_t arg_count){
     for (size_t i = 0; i < arg_count; i++)
     {
         if(args[i].type != func->args[i]){
-            printf("ERROR: Incorrect type for argument %i\n",i);
+            errout("ERROR: Incorrect type for argument %i\n",i);
             expr err;
             err.type = VAR_ERROR;
             return err;

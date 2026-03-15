@@ -6,14 +6,17 @@ html{
     </head>
     <body>
         <div id="yo">
-        {
-            string t = "some text";
-            outln(t);
+        <p>
+            {
+                string t = "some text";
+                outln(t);
 
-            outln("Hello World!");
+                outln(datetime());
 
-            outln(datetime());
-        }
+                outln("Hello World!");
+            }            
+        </p>
+
         </div>
     </body>
 
