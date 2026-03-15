@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#define as_str(cstr) (string){sizeof(cstr),cstr}
-
 enum var_type {
     VAR_ERROR,
     VAR_VOID,
@@ -39,7 +37,7 @@ typedef struct var{
 
 typedef struct code_block{
     string body;
-    int body_index;
+    size_t body_index;
     int indexes[INDEX_MAX];
     int var_count;
     var variables[VAR_COUNT];
@@ -58,8 +56,12 @@ typedef struct func{
 
 expr parse_function(code_block* b, string ident);
 expr call_func(func func);
-void strip_whitespace(code_block* b);
 
+void strip_whitespace(code_block* b){
+    while(isspace(b->body.value[b->body_index])){
+        b->body_index++;
+    }    
+}
 char eat(code_block* b){
     strip_whitespace(b);
     //putchar(b->body.value[b->body_index]);
@@ -69,31 +71,19 @@ char peek(code_block* b){
     strip_whitespace(b);
     return b->body.value[b->body_index];
 }
-
 string scan(code_block* b){
-
     strip_whitespace(b);
-
     string s;
     s.value = b->body.value + b->body_index;
     s.length = 0;
-
     while(isalnum(b->body.value[b->body_index])){
-        //putchar(b->body.value[b->body_index]);
         b->body_index++;
         s.length++;
-
     } 
-    //putchar('\n');
-
     return s;
 }
 
-void strip_whitespace(code_block* b){
-    while(isspace(b->body.value[b->body_index])){
-        b->body_index++;
-    }    
-}
+
 
 unsigned int hash(string str){
     unsigned int h = 0;
@@ -105,11 +95,8 @@ unsigned int hash(string str){
     return h % INDEX_MAX;
 }
 
-
-
 var* new_var(code_block* b, string ident, enum var_type type){
     int h = hash(ident);
-
 
     b->indexes[h] = b->var_count;
     var* v = b->variables + b->var_count;
@@ -536,7 +523,10 @@ expr parse_function(code_block* b, string ident){
         }
         //parse operands
     }
+
     eat(b); //closing semicolon
+
+
     if(compare(ident,"out") == 0){
         //print output to buffer
         for (size_t i = 0; i < ex[0].svalue.length; i++)
@@ -545,7 +535,18 @@ expr parse_function(code_block* b, string ident){
         }
         ret.type = VAR_VOID;
     }
+
+    if(compare(ident,"outln") == 0){
+        //print output to buffer
+        for (size_t i = 0; i < ex[0].svalue.length; i++)
+        {
+            putchar(ex[0].svalue.value[i]);
+        }
+        putchar('\n');
+        ret.type = VAR_VOID;
+    }
     
+
     //call function
     //call_func();
     
@@ -569,13 +570,7 @@ int parse_expression(code_block* b){
 
     switch (ch)
     {
-    case '{':
-        b->brackets++;
-        return 0;
-    case '}':
-        b->brackets--;
-        return 0;
-    
+
     default:
         if(isalpha(ch)){ //starts with a word
             string word = scan(b);
@@ -647,6 +642,20 @@ int parse_expression(code_block* b){
 }
 
 int parse_statement(code_block* b){
+
+    char ch = peek(b);
+
+    if(ch == '{'){
+        b->brackets++;
+        eat(b);
+        return 0;        
+    }
+    if(ch == '}'){
+        b->brackets--;
+        eat(b);
+        return 0;        
+    }
+
     int r = parse_expression(b);
     if(peek(b) == ';'){
         eat(b);
@@ -671,7 +680,7 @@ void clean_block(code_block *b){
 
 int run(code_block *b){
 
-    printf("running %s\n",b->body.value);
+    //printf("running %s\n",b->body.value);
     b->brackets = 1;
     while(b->body_index < b->body.length && b->brackets > 0){
         if(parse_statement(b) < 0){ //error
@@ -694,9 +703,11 @@ expr call_func(func func){
     return b.return_val;
 }
 
-int execute(string s, int index){
+int execute(string s, size_t *index){
     code_block b;
     b.body = s;
-    b.body_index = index;
-    return run(&b);
+    b.body_index = *index;
+    int r = run(&b);
+    *index = b.body_index;
+    return r;
 }

@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <string.h>
 #include "html.h"
+#include <stdio.h>
 
 string make_string(int len, char* src){
     return (string){len, src};
@@ -28,37 +29,33 @@ void insert_id(tag tag){
 */
 
 string file;
-size_t index;
-
-//size_t code_blocks[256]; //index of code block
-//size_t code_block_count;
-
+size_t file_index;
 
 int eof(){
-    return index > file.length;
+    return file_index > file.length;
 }
 
 
 string read_word(){
 
-    while(isspace(file.value[index])){
-        index++;
+    while(isspace(file.value[file_index])){
+        file_index++;
     }    
 
     string s;
-    s.value = file.value + index;
+    s.value = file.value + file_index;
     s.length = 0;
 
     //either scan a word, or a series of symbols
-    if(isalpha(file.value[index])){
-        while(isalpha(file.value[index])){
-            index++;
+    if(isalpha(file.value[file_index])){
+        while(isalpha(file.value[file_index])){
+            file_index++;
             s.length++;
         }        
     }
     else{
-        while(!isalpha(file.value[index])){
-            index++;
+        while(!isalpha(file.value[file_index])){
+            file_index++;
             s.length++;
         } 
     }
@@ -78,31 +75,38 @@ int compare(string s, char* other){
 }
 
 
-string parse_file(string in){
+void parse_file(string in){
     file = in;
-    index = 0;
+    file_index = 0;
     //code_block_count = 0;
-    while (index < file.length){
-        char ch = file.value[index];
-        index++;
+    while (file_index < file.length){
         string word = read_word();
 
         //html block, eat until it finds an open bracket
         if(compare(word,"html") == 0){
-            while (!eof())
+
+            if(file.value[file_index++] != '{'){ //invalid html block
+                return;
+            }
+
+            while (file.value[file_index] != '}' && !eof())
             {
-                char ch = file.value[index++];
+                char ch = file.value[file_index++];
+                
                 switch (ch)
                 {
                 case '{':
-                    execute(file,index);
+                    execute(file,&file_index);
                     break;
                 
                 default:
+                    putchar(ch); //print out
                     break;
                 }
             }
             
         }
+
+
     }
 }

@@ -1,0 +1,19 @@
+html{
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+
+    </head>
+    <body>
+        <div id="yo">
+        {
+            string t = "some text";
+            outln(t);
+
+            outln("Hello World!");
+        }
+        </div>
+    </body>
+
+    </html>    
+}
