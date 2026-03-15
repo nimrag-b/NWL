@@ -1,0 +1,47 @@
+#include otherfile.nwl //textual insert can be used to import functions, to insert repeated blocks of code etc
+
+//blocks are executed in order
+//code blocks contain functions and data
+//html blocks contain code that will be emitted
+
+//if a main block exists, it will be executed on load
+int main(){
+    
+}
+
+html{
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <$CONTENT> //a hook where you can insert other parts into
+    </head>
+    <body>
+        <div id="yo">
+        //an insert block, will execute whatever is inside
+        {
+            string t = "some text";
+            this //refers to current html tag that this code is in. can also acces children
+            out(t); //out will emit text inserted into the html
+        }
+        </div>
+    </body>
+
+    </html>    
+}
+
+
+
+
+
+
+
+
+
+
+
+//allows inserting into other loaded bits
+$CONTENT = html{
+
+}
+
+#include layout.nwl //included afterwards as its a textual insert
