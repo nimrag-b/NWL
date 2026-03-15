@@ -11,6 +11,8 @@ html{
             outln(t);
 
             outln("Hello World!");
+
+            outln(datetime());
         }
         </div>
     </body>

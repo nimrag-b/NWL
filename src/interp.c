@@ -4,58 +4,11 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-
-enum var_type {
-    VAR_ERROR,
-    VAR_VOID,
-    VAR_INT,
-    VAR_FLOAT,
-    VAR_BOOL,
-    VAR_STRING,
-    VAR_CHAR
-};
-
-typedef struct{
-    enum var_type type;
-    union
-    {
-        int ivalue;
-        float fvalue;
-        char cvalue;
-        string svalue;
-    };
-    
-} expr;
-
-typedef struct var{
-    string ident;
-    expr expr;
-} var;
-
-#define VAR_COUNT 256
-#define INDEX_MAX 2048
-
-typedef struct code_block{
-    string body;
-    size_t body_index;
-    int indexes[INDEX_MAX];
-    int var_count;
-    var variables[VAR_COUNT];
-    int brackets;
-
-    enum var_type returntype;
-    expr return_val;
-}code_block;
-
-
-typedef struct func{
-    string ident;
-    code_block body;
-}func;
+#include "lang.h"
 
 
 expr parse_function(code_block* b, string ident);
-expr call_func(func func);
+expr call_func(func *func, expr* args, size_t arg_count);
 
 void strip_whitespace(code_block* b){
     while(isspace(b->body.value[b->body_index])){
@@ -126,7 +79,6 @@ int is_binary_op(char ch){
         return 0;
     }
 }
-
 
 
 expr parse_literal(code_block* b){
@@ -498,12 +450,12 @@ int parse_assign(code_block* b, var* var){
     return 0;
 }
 
+
 expr parse_function(code_block* b, string ident){
     expr ex[32];
     expr ret;
     ret.type = VAR_VOID;
     int i = 0;
-    //func f = 
 
     if(eat(b) != '('){
         ret.type = VAR_ERROR;
@@ -512,7 +464,7 @@ expr parse_function(code_block* b, string ident){
     }
     while (peek(b) != ')')
     {
-        ex[i] = parse_binary(b,0);
+        ex[i++] = parse_binary(b,0);
         if(peek(b) ==')'){
             break;
         }
@@ -524,32 +476,17 @@ expr parse_function(code_block* b, string ident){
         //parse operands
     }
 
-    eat(b); //closing semicolon
+    eat(b); //closing paren
 
+    func* fn = get_func(&b->funcs,ident);
 
-    if(compare(ident,"out") == 0){
-        //print output to buffer
-        for (size_t i = 0; i < ex[0].svalue.length; i++)
-        {
-            putchar(ex[0].svalue.value[i]);
-        }
-        ret.type = VAR_VOID;
+    if(fn->ident.length != ident.length){
+        ret.type = VAR_ERROR;
+        printf("ERROR: invalid function.\n");
+        return ret;
     }
 
-    if(compare(ident,"outln") == 0){
-        //print output to buffer
-        for (size_t i = 0; i < ex[0].svalue.length; i++)
-        {
-            putchar(ex[0].svalue.value[i]);
-        }
-        putchar('\n');
-        ret.type = VAR_VOID;
-    }
-    
-
-    //call function
-    //call_func();
-    
+    ret = call_func(fn,ex, i);
 
     return ret;
 }
@@ -613,7 +550,7 @@ int parse_expression(code_block* b){
 
                     if(compare(word,"return") == 0){
                         expr ex = parse_binary(b,0);
-                        if(ex.type == b->returntype){
+                        if(ex.type == b->return_type){
                             b->return_val = ex;
                             return 1;
                         }
@@ -694,19 +631,46 @@ int run(code_block *b){
 }
 
 
-expr call_func(func func){
-    code_block b = func.body;
-    b.body_index = 0;
-    if(run(&b) == -1){ //failed
-        b.return_val.type = VAR_ERROR;
+expr call_func(func *func, expr* args, size_t arg_count){
+
+
+
+    if(arg_count != func->arg_count){
+        printf("ERROR: Incorrect number of arguments in function.\n");
+        expr err;
+        err.type = VAR_ERROR;
+        return err;
     }
-    return b.return_val;
+
+    for (size_t i = 0; i < arg_count; i++)
+    {
+        if(args[i].type != func->args[i]){
+            printf("ERROR: Incorrect type for argument %i\n",i);
+            expr err;
+            err.type = VAR_ERROR;
+            return err;
+        }
+    }
+    
+
+    if(func->internal){
+        return func->internal_func(args);
+    }
+
+    code_block *b = func->body;
+    b->body_index = 0;
+    if(run(b) == -1){ //failed
+        b->return_val.type = VAR_ERROR;
+    }
+    return b->return_val;
 }
 
 int execute(string s, size_t *index){
     code_block b;
     b.body = s;
     b.body_index = *index;
+    b.funcs;
+    make_internal(&b.funcs);
     int r = run(&b);
     *index = b.body_index;
     return r;
