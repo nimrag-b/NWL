@@ -45,7 +45,6 @@ expr datetime_internal(expr* args){
     return r;
 }
 
-
 unsigned int hash_func(string str){
     unsigned int h = 0;
     for (size_t i = 0; i < str.length; i++)

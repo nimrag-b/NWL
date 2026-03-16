@@ -7,17 +7,17 @@
 #include "lang.h"
 
 //#define ERR_NONE
+#define ERR_VERBOSE
 
 #ifdef ERR_VERBOSE
     #define errout(...) printf(__VA_ARGS__)    
-#elifdef ERR_NONE
-    #define errout(...) 
 #else
     #define errout(...) printf("ERROR")    
 #endif
 
 int parse_block(code_block *b);
 
+var* parse_index(code_block* b, var* var);
 expr parse_function(code_block* b, string ident);
 expr call_func(func *func, expr* args, size_t arg_count);
 
@@ -68,6 +68,29 @@ var* new_var(code_block* b, string ident, enum var_type type){
     v->expr.type = type;
     b->var_count++;
 
+    return v;
+}
+
+var* new_array(code_block* b, string ident, enum var_type type){
+    var* v = new_var(b,ident,VAR_ARRAY);
+    v->expr.arr.type = type;
+    v->expr.arr.count = 0;
+    v->expr.arr.items = NULL;
+
+    return v;
+}
+
+var* init_array(var* v, size_t count){
+    if(v->expr.arr.items != NULL){
+        free(v->expr.arr.items);
+    }
+    v->expr.arr.count = count;
+    v->expr.arr.items = malloc(sizeof(var) * count);
+    for (size_t i = 0; i < count; i++)
+    {
+        v->expr.arr.items[i].expr.type = v->expr.arr.type;
+    }
+    
     return v;
 }
 
@@ -214,6 +237,10 @@ expr parse_literal(code_block* b){
         else{
 
             var *v = get(b,name);
+            if(peek(b) == '['){
+                v = parse_index(b,v);
+            }
+
             if(v->expr.type == VAR_STRING){
                 char* c = malloc(v->expr.svalue.length * sizeof(char));
                 memcpy(c,v->expr.svalue.value,v->expr.svalue.length);
@@ -232,7 +259,7 @@ expr parse_literal(code_block* b){
         return ex;
     }
     
-    errout("ERROR: Invalid literal '%s'.\n",scan(b));
+    errout("ERROR: Invalid literal '%s'.\n",scan(b).value);
     ex.type = VAR_ERROR;
     return ex;
 }
@@ -477,9 +504,58 @@ expr parse_binary(code_block* b, int min_prec){
     return lhs;
 }
 
+var* parse_index(code_block* b, var* var){
+
+
+    if(var->expr.type != VAR_ARRAY){
+        return NULL;
+    }
+
+    if(eat(b) != '['){
+        errout("ERROR: Invalid indexing.");
+        return NULL;
+    }
+
+    expr ex = parse_binary(b,0);
+    if(ex.type != VAR_INT){
+        errout("ERROR: Array index Must be an int.");
+        return NULL;
+    }
+    if(ex.ivalue < 0 || ex.ivalue >= var->expr.arr.count){
+        errout("ERROR: Index out of bounds.");
+        return NULL;
+    }
+
+    if(eat(b) != ']'){
+        errout("ERROR: Unclosed square bracket.");
+        return  NULL;
+    }
+
+    return var->expr.arr.items + ex.ivalue;
+}
+
+
 int parse_assign(code_block* b, var* var){
     if(eat(b) != '='){ //must have an equals here
         return -1;
+    }
+
+    if(var->expr.type == VAR_ARRAY){
+        if(eat(b) != '['){
+            return -1;
+        }
+
+        expr ex = parse_binary(b,0);
+        if(ex.type != VAR_INT){
+            return -1;
+        }
+
+        init_array(var,ex.ivalue);
+
+        if(eat(b) != ']'){
+            return -1;
+        }
+        return 0;
     }
 
     expr ex = parse_binary(b,0);
@@ -505,6 +581,17 @@ int parse_assign(code_block* b, var* var){
     var->expr = ex;
 
     return 0;
+}
+
+
+int parse_index_assign(code_block* b, var* var){
+    var = parse_index(b,var);
+    if(var == NULL){
+
+        return -1;
+    }
+    return parse_assign(b,var);
+    
 }
 
 
@@ -550,7 +637,23 @@ expr parse_function(code_block* b, string ident){
 }
 
 int parse_new(code_block* b, string ident, enum var_type type){
-    var* v = new_var(b,ident,type);
+
+    var* v;
+    //array declaration
+    if(peek(b) == '['){
+        eat(b);
+        if(eat(b) != ']'){
+            return -1;
+        }
+
+        ident = scan(b);
+
+        v = new_array(b,ident,type);
+    }
+    else{
+        v = new_var(b,ident,type);
+    }
+
 
     if(peek(b) == '='){
         return parse_assign(b,v);
@@ -616,6 +719,8 @@ int parse_if(code_block* b){
     else{
         b->body_index = idx;
     }
+
+    return 0;
 }
 
 
@@ -634,60 +739,52 @@ int parse_expression(code_block* b, string word){
         else{
             r = 0;
         }
-        break;
-    default:
-
-
-        if(isalpha(next)){
-            if(compare(word,"string") == 0){
-                r = parse_new(b,scan(b),VAR_STRING);
-                break;
-            }
-            if(compare(word,"int") == 0){
-                r = parse_new(b,scan(b),VAR_INT);
-                break;
-            }
-            if(compare(word,"float") == 0){
-                r = parse_new(b,scan(b),VAR_FLOAT);
-                break;
-            }
-            if(compare(word,"bool") == 0){
-                r = parse_new(b,scan(b),VAR_BOOL);
-                break;
-            }
-            if(compare(word,"char") == 0){
-                r = parse_new(b,scan(b),VAR_CHAR);
-                break;
-            }
-
-            
-
-
-            if(compare(word,"return") == 0){
-                expr ex = parse_binary(b,0);
-                if(ex.type == b->return_type){
-                    b->return_val = ex;
-                    return 1;
-                }
-                else{
-                    errout("ERROR: Invalid return type.\n");
-                    return -1;
-                }
-                break;
-            }
-        }
-
-        if(next == '='){
-            r = parse_assign(b, get(b,word));
-            break;
-        }
-        //invalid statement
-        errout("ERROR: Invalid expression.\n");
-        return -1;
+        return r;
+    case '=':
+        return parse_assign(b, get(b,word));
     }
     
 
-    return r;
+    
+    if(compare(word,"string") == 0){
+        return parse_new(b,scan(b),VAR_STRING);
+    }
+    if(compare(word,"int") == 0){
+        return parse_new(b,scan(b),VAR_INT);
+    }
+    if(compare(word,"float") == 0){
+        return parse_new(b,scan(b),VAR_FLOAT);
+    }
+    if(compare(word,"bool") == 0){
+        return parse_new(b,scan(b),VAR_BOOL);
+    }
+    if(compare(word,"char") == 0){
+        return parse_new(b,scan(b),VAR_CHAR);
+    }
+
+    if(compare(word,"return") == 0){
+        expr ex = parse_binary(b,0);
+        if(ex.type == b->return_type){
+            b->return_val = ex;
+            return 1;
+        }
+        else{
+            errout("ERROR: Invalid return type.\n");
+            return -1;
+        }
+        return 0;
+    }
+    
+
+
+    if(next =='['){
+        return parse_index_assign(b, get(b,word));          
+    }
+
+    //invalid statement
+    errout("ERROR: Invalid expression.\n");
+    return -1;
+
 }
 
 int parse_statement(code_block* b){
@@ -725,7 +822,7 @@ int parse_statement(code_block* b){
         }        
     }
 
-
+    return 0;
 }
 
 
@@ -794,7 +891,7 @@ expr call_func(func *func, expr* args, size_t arg_count){
         if(args[i].type != func->args[i]){
             args[i] = try_convert(args[i],func->args[i]);
             if(args[i].type == VAR_ERROR){
-                errout("ERROR: Incorrect type for argument %i\n",i);
+                errout("ERROR: Incorrect type for argument %u\n",i);
                 expr err;
                 err.type = VAR_ERROR;
                 return err;                

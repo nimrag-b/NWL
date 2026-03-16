@@ -12,10 +12,11 @@ enum var_type {
     VAR_FLOAT,
     VAR_BOOL,
     VAR_STRING,
-    VAR_CHAR
+    VAR_CHAR,
+    VAR_ARRAY
 };
 
-typedef struct{
+typedef struct expr{
     enum var_type type;
     union
     {
@@ -23,9 +24,16 @@ typedef struct{
         float fvalue;
         char cvalue;
         string svalue;
+        struct arr{
+            enum var_type type;
+            size_t count;
+            struct var* items;
+        } arr;
     };
     
 } expr;
+
+
 
 typedef struct var{
     string ident;

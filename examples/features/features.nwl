@@ -13,9 +13,18 @@ html{
         </p>
         <p>
             {
+                int[] num = [5];
+
                 string t = "Hello";
                 string ta = "World!";
                 outln(t + ta);
+
+                
+                num[2] = 45;
+                num[5] = 12;
+
+                int a = 5 + num[4];
+                outln(a + num[2]);
 
                 outln("The current date is " + datetime());
 
