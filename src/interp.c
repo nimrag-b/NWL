@@ -223,6 +223,74 @@ expr parse_literal(code_block* b){
     return ex;
 }
 
+expr try_convert(expr ex, enum var_type type){
+
+    switch (type)
+    {
+        case VAR_STRING:
+            char *buf;
+            int len;
+            switch(ex.type){
+                case VAR_INT:
+                    len = snprintf(NULL, 0, "%i", ex.ivalue);
+                    buf = malloc(len + 1);
+                    snprintf(buf, 10, "%i", ex.ivalue);
+                    ex.svalue = to_string(buf);
+                    ex.type = VAR_STRING;
+                break;
+                case VAR_FLOAT:
+                    len = snprintf(NULL, 0, "%g", ex.fvalue);
+                    buf = malloc(len + 1);
+                    snprintf(buf, len + 1, "%g", ex.fvalue);
+                    ex.svalue = to_string(buf);
+                    ex.type = VAR_STRING;
+                break;
+                case VAR_CHAR:
+                    buf = malloc(sizeof(char));
+                    buf[0] = ex.cvalue;
+                    ex.svalue = (string){1,buf};
+                    ex.type = VAR_STRING;
+                break;
+
+                default:
+                    errout("ERROR: Could not convert value to string.\n");
+                    ex.type = VAR_ERROR;
+                    return ex;
+            }
+            break;
+        case VAR_INT:
+            if(ex.type == VAR_FLOAT){ //handle cast to int
+                ex.ivalue = (int)ex.fvalue;
+                ex.type = VAR_INT;
+            }
+            else{
+                errout("ERROR: Could not cast value to int.\n");
+                ex.type = VAR_ERROR;
+                return ex;
+            }
+        break;
+        case VAR_FLOAT:
+            if(ex.type == VAR_INT){ //handle cast to float
+                ex.fvalue = (float)ex.ivalue;
+                ex.type = VAR_FLOAT;
+            }
+            else{
+                errout("ERROR: Could not cast value to float.\n");
+                ex.type = VAR_ERROR;
+                return ex;
+            }
+        break;
+    
+    default:
+        errout("ERROR: Could not cast value.\n");
+        ex.type = VAR_ERROR;
+        return ex;
+        break;
+    }
+
+    return ex;
+}
+
 expr parse_binary(code_block* b, int min_prec){
     char ch = peek(b);
 
@@ -311,21 +379,21 @@ expr parse_binary(code_block* b, int min_prec){
         eat(b); //eat token
         expr rhs = parse_binary(b,bpr);
 
+        if(rhs.type != lhs.type){
+            //this is hacky and probably would be better with some kind of binding power evaluation, 
+            //but this is the only case im worried about at the moment, so its fine
+            if(rhs.type == VAR_FLOAT && lhs.type == VAR_INT){ 
+                lhs = try_convert(lhs,VAR_FLOAT);
+            }
+            else{
+                rhs = try_convert(rhs,lhs.type);
+            }
+            
+        }
+
         switch (lhs.type)
         {
             case VAR_INT:
-                if(rhs.type != VAR_INT){
-                    if(rhs.type == VAR_FLOAT){ //handle cast to int
-                        rhs.ivalue = (int)rhs.fvalue;
-                        rhs.type = VAR_INT;
-                    }
-                    else{
-                        errout("ERROR: Could not cast value to int.\n");
-                        lhs.type = VAR_ERROR;
-                        return lhs;
-                    }
-                }
-
                 switch (ch)
                 {
                     case '+':
@@ -345,18 +413,8 @@ expr parse_binary(code_block* b, int min_prec){
                 }
 
             break;
+
             case VAR_FLOAT:
-                if(rhs.type != VAR_FLOAT){
-                    if(rhs.type == VAR_INT){ //handle cast to int
-                        rhs.fvalue = (float)rhs.ivalue;
-                        rhs.type = VAR_FLOAT;
-                    }
-                    else{
-                        errout("ERROR: Could not cast value to float.\n");
-                        lhs.type = VAR_ERROR;
-                        return lhs;
-                    }
-                }
 
                 switch (ch)
                 {
@@ -378,39 +436,6 @@ expr parse_binary(code_block* b, int min_prec){
 
             break;
             case VAR_STRING:
-
-                if(rhs.type != VAR_STRING){
-                    char *buf;
-                    int len;
-                    switch(rhs.type){
-                        case VAR_INT:
-                            len = snprintf(NULL, 0, "%i", rhs.ivalue);
-                            buf = malloc(len + 1);
-                            snprintf(buf, 10, "%i", rhs.ivalue);
-                            rhs.svalue = to_string(buf);
-                            rhs.type = VAR_STRING;
-                        break;
-                        case VAR_FLOAT:
-                            len = snprintf(NULL, 0, "%f", rhs.fvalue);
-                            buf = malloc(len + 1);
-                            snprintf(buf, len + 1, "%f", rhs.fvalue);
-                            rhs.svalue = to_string(buf);
-                            rhs.type = VAR_STRING;
-                        break;
-                        case VAR_CHAR:
-                            buf = malloc(sizeof(char));
-                            buf[0] = rhs.cvalue;
-                            rhs.svalue = (string){1,buf};
-                            rhs.type = VAR_STRING;
-                        break;
-
-                        default:
-                            errout("ERROR: Could not convert value to string.\n");
-                            lhs.type = VAR_ERROR;
-                            return lhs;
-                    }
-
-                }
                 if(ch == '+'){
                     char* ns = malloc((lhs.svalue.length + rhs.svalue.length)* sizeof(char));
                     memcpy(ns, lhs.svalue.value, lhs.svalue.length);
@@ -446,7 +471,11 @@ int parse_assign(code_block* b, var* var){
     }
 
     if(var->expr.type != ex.type){
-        return -1;
+        ex = try_convert(ex,var->expr.type);
+        if(ex.type == VAR_ERROR){
+            return -1;
+        }
+
     }
 
     if(var->expr.type == VAR_STRING){ //make sure to free the string if its assigned
@@ -656,11 +685,15 @@ expr call_func(func *func, expr* args, size_t arg_count){
     for (size_t i = 0; i < arg_count; i++)
     {
         if(args[i].type != func->args[i]){
-            errout("ERROR: Incorrect type for argument %i\n",i);
-            expr err;
-            err.type = VAR_ERROR;
-            return err;
+            args[i] = try_convert(args[i],func->args[i]);
+            if(args[i].type == VAR_ERROR){
+                errout("ERROR: Incorrect type for argument %i\n",i);
+                expr err;
+                err.type = VAR_ERROR;
+                return err;                
+            }
         }
+
     }
     
 
