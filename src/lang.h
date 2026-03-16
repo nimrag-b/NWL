@@ -70,7 +70,11 @@ typedef struct func_table
 }func_table;
 
 
-
+typedef struct err{
+    char* error;
+    size_t err_line;
+    size_t err_char;
+}err;
 
 
 typedef struct code_block{
@@ -83,6 +87,12 @@ typedef struct code_block{
     func_table funcs;
     enum var_type return_type;
     expr return_val;
+
+    size_t line;
+    size_t line_char;
+
+    int has_error;
+    err error;
 
     code_block* parent;
 }code_block;

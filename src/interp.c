@@ -10,25 +10,63 @@
 #define ERR_VERBOSE
 
 #ifdef ERR_VERBOSE
-    #define errout(...) printf(__VA_ARGS__)    
+int errout(code_block *b, char* err){
+    if(b->has_error){
+        return -1;
+    }
+    b->has_error = 1;
+    b->error.error = err;
+    b->error.err_line = b->line;
+    b->error.err_char = b->line_char;
+
+    return -1;
+}
+
 #else
-    #define errout(...) printf("ERROR")    
+int errout(code_block *b, char* err){
+    if(b->has_error){
+        return -1;
+    }
+    b->has_error = 1;
+    b->error.error = "ERROR";
+    b->error.err_line = b->line;
+    b->error.err_char = b->line_char;
+
+    return -1;
+}
+
 #endif
+
+
+
+
 
 int parse_block(code_block *b);
 
 var* parse_index(code_block* b, var* var);
 expr parse_function(code_block* b, string ident);
-expr call_func(func *func, expr* args, size_t arg_count);
+expr call_func(code_block* b, func *func, expr* args, size_t arg_count);
 
 void strip_whitespace(code_block* b){
     while(isspace(b->body.value[b->body_index])){
+
         b->body_index++;
+        b->line_char++;
+
+        if(b->body_index == '\n'){
+            b->line++;
+            b->line_char = 0;
+        }
     }    
 }
 char eat(code_block* b){
     strip_whitespace(b);
-    //putchar(b->body.value[b->body_index]);
+    b->line_char++;
+
+    if(b->body_index == '\n'){
+        b->line++;
+        b->line_char = 0;
+    }
     return b->body.value[b->body_index++];
 }
 char peek(code_block* b){
@@ -67,7 +105,7 @@ var* new_var(code_block* b, string ident, enum var_type type){
     v->ident = ident;
     v->expr.type = type;
     b->var_count++;
-
+    v->expr.ivalue = 0;
     return v;
 }
 
@@ -89,6 +127,7 @@ var* init_array(var* v, size_t count){
     for (size_t i = 0; i < count; i++)
     {
         v->expr.arr.items[i].expr.type = v->expr.arr.type;
+        v->expr.arr.items[i].expr.ivalue = 0;
     }
     
     return v;
@@ -131,7 +170,7 @@ expr parse_literal(code_block* b){
         while(isdigit(peek(b))){
             num = (num * 10) + (eat(b) - '0');
             if(num < 0){ 
-                errout("ERROR: Int too large.\n");
+                errout(b,"ERROR: Int too large.\n");
                 ex.type = VAR_ERROR;
                 return ex;
                 //static overflow, throw error
@@ -155,13 +194,13 @@ expr parse_literal(code_block* b){
                 d++;
                 f = f + v;
                 if(f > 1){
-                    errout("ERROR: Float too large.\n");
+                    errout(b,"ERROR: Float too large.\n");
                     ex.type = VAR_ERROR;
                     return ex;
                 }
             }
             if(peek(b) != 'f'){
-                errout("ERROR: Expected 'f' at end of float.\n");
+                errout(b,"ERROR: Expected 'f' at end of float.\n");
                 ex.type = VAR_ERROR;
                 return ex;
             }
@@ -184,7 +223,7 @@ expr parse_literal(code_block* b){
         int i = 0;
         while(b->body.value[b->body_index] != '\"'){
             if(i >= 2048){
-                errout("ERROR: String must not exceed 2048 characters.\n");
+                errout(b,"ERROR: String must not exceed 2048 characters.\n");
                 ex.type = VAR_ERROR;
                 return ex;
             }
@@ -192,7 +231,7 @@ expr parse_literal(code_block* b){
         }
 
         if(eat(b) != '\"'){
-            errout("ERROR: Invalid string literal.\n");
+            errout(b,"ERROR: Invalid string literal.\n");
             ex.type = VAR_ERROR;
             return ex;
         }
@@ -213,13 +252,13 @@ expr parse_literal(code_block* b){
         }
         else{
             //handle escape characters
-            errout("ERROR: Invalid escape char.\n");
+            errout(b,"ERROR: Invalid escape char.\n");
             ex.type = VAR_ERROR;
             return ex;
         }
 
         if(eat(b) != '\''){
-            errout("ERROR: Invalid char literal.\n");
+            errout(b,"ERROR: Invalid char literal.\n");
             ex.type = VAR_ERROR;
             return ex;
         }
@@ -258,8 +297,10 @@ expr parse_literal(code_block* b){
 
         return ex;
     }
-    
-    errout("ERROR: Invalid literal '%s'.\n",scan(b).value);
+    char errbuf[256];
+    snprintf(errbuf, 256, "ERROR: Invalid literal '%s'.\n",scan(b).value);
+
+    errout(b,errbuf);
     ex.type = VAR_ERROR;
     return ex;
 }
@@ -297,7 +338,7 @@ expr try_convert(expr ex, enum var_type type){
                 break;
 
                 default:
-                    errout("ERROR: Could not convert value to string.\n");
+
                     ex.type = VAR_ERROR;
                     return ex;
             }
@@ -308,7 +349,6 @@ expr try_convert(expr ex, enum var_type type){
                 ex.type = VAR_INT;
             }
             else{
-                errout("ERROR: Could not cast value to int.\n");
                 ex.type = VAR_ERROR;
                 return ex;
             }
@@ -319,14 +359,12 @@ expr try_convert(expr ex, enum var_type type){
                 ex.type = VAR_FLOAT;
             }
             else{
-                errout("ERROR: Could not cast value to float.\n");
                 ex.type = VAR_ERROR;
                 return ex;
             }
         break;
     
     default:
-        errout("ERROR: Could not cast value.\n");
         ex.type = VAR_ERROR;
         return ex;
         break;
@@ -372,7 +410,7 @@ expr parse_binary(code_block* b, int min_prec){
             break;
         
         default:
-            errout("ERROR: Invalid unary operator. Valid values are '-' and '+'.\n");
+            errout(b,"ERROR: Invalid unary operator. Valid values are '-' and '+'.\n");
             lhs.type = VAR_ERROR;
             return lhs;
         }
@@ -381,7 +419,7 @@ expr parse_binary(code_block* b, int min_prec){
         eat(b);
         lhs = parse_binary(b, 0);
         if(eat(b) != ')'){
-            errout("ERROR: unclosed brackets.\n");
+            errout(b,"ERROR: unclosed brackets.\n");
             lhs.type = VAR_ERROR;
             return lhs;
         }
@@ -428,11 +466,14 @@ expr parse_binary(code_block* b, int min_prec){
             //but this is the only case im worried about at the moment, so its fine
             if(rhs.type == VAR_FLOAT && lhs.type == VAR_INT){ 
                 lhs = try_convert(lhs,VAR_FLOAT);
+
             }
             else{
                 rhs = try_convert(rhs,lhs.type);
             }
-            
+            if(lhs.type != rhs.type){
+                errout(b,"ERROR: Could not convert to compatible type.\n");
+            }
         }
 
         switch (lhs.type)
@@ -490,7 +531,7 @@ expr parse_binary(code_block* b, int min_prec){
                     lhs.svalue = (string){(lhs.svalue.length+rhs.svalue.length),ns};                    
                 }
                 else{
-                    errout("ERROR: Invalid Operation.\n");
+                    errout(b,"ERROR: Invalid Operation.\n");
                     lhs.type = VAR_ERROR;
                     return lhs;
                 }
@@ -512,22 +553,22 @@ var* parse_index(code_block* b, var* var){
     }
 
     if(eat(b) != '['){
-        errout("ERROR: Invalid indexing.");
+        errout(b,"ERROR: Invalid indexing.");
         return NULL;
     }
 
     expr ex = parse_binary(b,0);
     if(ex.type != VAR_INT){
-        errout("ERROR: Array index Must be an int.");
+        errout(b,"ERROR: Array index Must be an int.");
         return NULL;
     }
     if(ex.ivalue < 0 || ex.ivalue >= var->expr.arr.count){
-        errout("ERROR: Index out of bounds.");
+        errout(b,"ERROR: Index out of bounds.");
         return NULL;
     }
 
     if(eat(b) != ']'){
-        errout("ERROR: Unclosed square bracket.");
+        errout(b,"ERROR: Unclosed square bracket.");
         return  NULL;
     }
 
@@ -603,7 +644,7 @@ expr parse_function(code_block* b, string ident){
 
     if(eat(b) != '('){
         ret.type = VAR_ERROR;
-        errout("ERROR: No opening paren for function.\n");
+        errout(b,"ERROR: No opening paren for function.\n");
         return ret;
     }
     while (peek(b) != ')')
@@ -614,7 +655,7 @@ expr parse_function(code_block* b, string ident){
         }
         if(peek(b) != ','){
             ret.type = VAR_ERROR;
-            errout("ERROR: invalid parameters in function.\n");
+            errout(b,"ERROR: invalid parameters in function.\n");
             return ret;
         }
         //parse operands
@@ -627,11 +668,11 @@ expr parse_function(code_block* b, string ident){
 
     if(fn->ident.length != ident.length){
         ret.type = VAR_ERROR;
-        errout("ERROR: Invalid function.\n");
+        errout(b,"ERROR: Invalid function.\n");
         return ret;
     }
 
-    ret = call_func(fn,ex, i);
+    ret = call_func(b,fn,ex, i);
 
     return ret;
 }
@@ -769,7 +810,7 @@ int parse_expression(code_block* b, string word){
             return 1;
         }
         else{
-            errout("ERROR: Invalid return type.\n");
+            errout(b,"ERROR: Invalid return type.\n");
             return -1;
         }
         return 0;
@@ -782,7 +823,7 @@ int parse_expression(code_block* b, string word){
     }
 
     //invalid statement
-    errout("ERROR: Invalid expression.\n");
+    errout(b,"ERROR: Invalid expression.\n");
     return -1;
 
 }
@@ -817,7 +858,7 @@ int parse_statement(code_block* b){
             return r;
         }
         else{
-            errout("ERROR: Missing Semicolon.\n");
+            errout(b,"ERROR: Missing Semicolon.\n");
             return -1;
         }        
     }
@@ -843,10 +884,15 @@ int run(code_block *b){
     b->brackets = 1;
     while(b->body_index < b->body.length && b->brackets > 0){
         if(parse_statement(b) < 0){ //error
-            //printf("ERROR: Invalid Statement.\n");
-            //clean_block(b);
-            //return -1;
         }
+        if(b->has_error){
+            printf("%s at %zu:%zu\n",b->error.error, b->error.err_line, b->error.err_char);
+            b->has_error = 0;
+
+            //eat the rest of the broken statement
+            while(eat(b) != ';'){}
+        }
+
     }
     clean_block(b);
     return 0;
@@ -861,6 +907,9 @@ int parse_block(code_block *b){
     inner.body_index = b->body_index;
     inner.parent = b;
     inner.var_count = 0;
+    inner.line = 0;
+    inner.line_char = 0;
+    inner.has_error = 0;
     for (size_t i = 0; i < VAR_COUNT; i++)
     {
         inner.variables[i].expr.type = VAR_ERROR;
@@ -875,12 +924,12 @@ int parse_block(code_block *b){
 }
 
 
-expr call_func(func *func, expr* args, size_t arg_count){
+expr call_func(code_block* b, func *func, expr* args, size_t arg_count){
 
 
 
     if(arg_count != func->arg_count){
-        errout("ERROR: Incorrect number of arguments in function.\n");
+        errout(b,"ERROR: Incorrect number of arguments in function.\n");
         expr err;
         err.type = VAR_ERROR;
         return err;
@@ -891,7 +940,9 @@ expr call_func(func *func, expr* args, size_t arg_count){
         if(args[i].type != func->args[i]){
             args[i] = try_convert(args[i],func->args[i]);
             if(args[i].type == VAR_ERROR){
-                errout("ERROR: Incorrect type for argument %u\n",i);
+                char errbuf[256];
+                snprintf(errbuf,256,"ERROR: Incorrect type for argument %zu\n",i);
+                errout(b,errbuf);
                 expr err;
                 err.type = VAR_ERROR;
                 return err;                
@@ -905,12 +956,12 @@ expr call_func(func *func, expr* args, size_t arg_count){
         return func->internal_func(args);
     }
 
-    code_block *b = func->body;
-    b->body_index = 0;
-    if(run(b) == -1){ //failed
-        b->return_val.type = VAR_ERROR;
+    code_block *fb = func->body;
+    fb->body_index = 0;
+    if(run(fb) == -1){ //failed
+        fb->return_val.type = VAR_ERROR;
     }
-    return b->return_val;
+    return fb->return_val;
 }
 
 int execute(string s, size_t *index){
@@ -918,6 +969,9 @@ int execute(string s, size_t *index){
     b.body = s;
     b.body_index = *index;
     b.var_count = 0;
+    b.line = 0;
+    b.line_char = 0;
+    b.has_error = 0;
     for (size_t i = 0; i < VAR_COUNT; i++)
     {
         b.variables[i].expr.type = VAR_ERROR;
