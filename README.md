@@ -17,3 +17,8 @@ Simply run Make in the src directory, and it will produce a standalone file. It 
 ## Usage
 
 Pass the name of the file you wish to process into the executable, and it will emit HTML to stdout.
+
+
+### Example
+
+Run 'features.nwl' from the examples/features folder to get an idea of the current state of the project
