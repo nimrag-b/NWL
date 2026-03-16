@@ -16,7 +16,7 @@
     #define errout(...) printf("ERROR")    
 #endif
 
-
+int parse_block(code_block *b);
 
 expr parse_function(code_block* b, string ident);
 expr call_func(func *func, expr* args, size_t arg_count);
@@ -66,7 +66,6 @@ var* new_var(code_block* b, string ident, enum var_type type){
     var* v = b->variables + b->var_count;
     v->ident = ident;
     v->expr.type = type;
-
     b->var_count++;
 
     return v;
@@ -74,7 +73,13 @@ var* new_var(code_block* b, string ident, enum var_type type){
 
 
 var* get(code_block* b, string ident){
-    return b->variables + b->indexes[hash(ident)];
+    var* v = b->variables + b->indexes[hash(ident)];
+
+    if(v->expr.type == VAR_ERROR){
+        return get(b->parent,ident);
+    }
+
+    return v;
 }
 
 int is_binary_op(char ch){
@@ -90,6 +95,7 @@ int is_binary_op(char ch){
         return 0;
     }
 }
+
 
 
 expr parse_literal(code_block* b){
@@ -198,11 +204,15 @@ expr parse_literal(code_block* b){
     }
     
     if(isalpha(ch)){
+
+
+
         string name = scan(b);
         if(peek(b) == '('){
             ex = parse_function(b,name);
         }
         else{
+
             var *v = get(b,name);
             if(v->expr.type == VAR_STRING){
                 char* c = malloc(v->expr.svalue.length * sizeof(char));
@@ -213,8 +223,12 @@ expr parse_literal(code_block* b){
             else{
                 ex = v->expr; //copy expr
             }
-
+            
         }
+                    
+   
+
+
         return ex;
     }
     
@@ -225,6 +239,9 @@ expr parse_literal(code_block* b){
 
 expr try_convert(expr ex, enum var_type type){
 
+    if(ex.type == type){
+        return ex;
+    }
     switch (type)
     {
         case VAR_STRING:
@@ -516,9 +533,10 @@ expr parse_function(code_block* b, string ident){
         //parse operands
     }
 
+
     eat(b); //closing paren
 
-    func* fn = get_func(&b->funcs,ident);
+    func* fn = get_func(b,ident);
 
     if(fn->ident.length != ident.length){
         ret.type = VAR_ERROR;
@@ -541,79 +559,133 @@ int parse_new(code_block* b, string ident, enum var_type type){
     return 0;
 }
 
-int parse_expression(code_block* b){
-    char ch = peek(b);
-    int r = 0;
 
-    switch (ch)
-    {
+int parse_if(code_block* b){
+    if(eat(b) != '('){
+        return -1;
+    }
+    expr ex = parse_binary(b,0);
 
-    default:
-        if(isalpha(ch)){ //starts with a word
-            string word = scan(b);
-            //printf("word: %s\n",word.value);
-            char next = peek(b);
-            switch (next)
-            {
-            case '(':
-                if(parse_function(b, word).type == VAR_ERROR){
-                    r = -1;
-                }
-                else{
-                    r = 0;
-                }
-                break;
-            default:
-
-
-                if(isalpha(next)){
-                    if(compare(word,"string") == 0){
-                        r = parse_new(b,scan(b),VAR_STRING);
-                        break;
-                    }
-                    if(compare(word,"int") == 0){
-                        r = parse_new(b,scan(b),VAR_INT);
-                        break;
-                    }
-                    if(compare(word,"float") == 0){
-                        r = parse_new(b,scan(b),VAR_FLOAT);
-                        break;
-                    }
-                    if(compare(word,"bool") == 0){
-                        r = parse_new(b,scan(b),VAR_BOOL);
-                        break;
-                    }
-                    if(compare(word,"char") == 0){
-                        r = parse_new(b,scan(b),VAR_CHAR);
-                        break;
-                    }
-
-                    if(compare(word,"return") == 0){
-                        expr ex = parse_binary(b,0);
-                        if(ex.type == b->return_type){
-                            b->return_val = ex;
-                            return 1;
-                        }
-                        else{
-                            errout("ERROR: Invalid return type.\n");
-                            return -1;
-                        }
-                        break;
-                    }
-                }
-
-                if(next == '='){
-                    r = parse_assign(b, get(b,word));
-                    break;
-                }
-                //invalid statement
-                errout("ERROR: Invalid expression.\n");
-                return -1;
-            }
-        }
-        break;
+    if(eat(b) != ')'){
+        return -1;
     }
 
+    ex = try_convert(ex,VAR_INT);
+
+    if(ex.ivalue != 0){
+        parse_block(b);  
+    }
+    else{
+        if(eat(b) != '{'){
+            return -1;
+        }
+        int depth = 1;
+        while(depth > 0){
+            char ch = eat(b);
+            if(ch == '{'){
+                depth++;
+            }
+            if(ch == '}'){
+                depth--;
+            }
+        }
+    }
+
+    int idx = b->body_index;
+    string word = scan(b);
+    if(compare(word,"else") == 0){
+        if(ex.ivalue != 0){
+            if(eat(b) != '{'){
+                return -1;
+            }
+            int depth = 1;
+            while(depth > 0){
+                char ch = eat(b);
+                if(ch == '{'){
+                    depth++;
+                }
+                if(ch == '}'){
+                    depth--;
+                }
+            }
+        }
+        else{
+            parse_block(b);  
+        }
+    }
+    else{
+        b->body_index = idx;
+    }
+}
+
+
+int parse_expression(code_block* b, string word){
+
+    int r = 0;
+
+    //printf("word: %s\n",word.value);
+    char next = peek(b);
+    switch (next)
+    {
+    case '(':
+        if(parse_function(b, word).type == VAR_ERROR){
+            r = -1;
+        }
+        else{
+            r = 0;
+        }
+        break;
+    default:
+
+
+        if(isalpha(next)){
+            if(compare(word,"string") == 0){
+                r = parse_new(b,scan(b),VAR_STRING);
+                break;
+            }
+            if(compare(word,"int") == 0){
+                r = parse_new(b,scan(b),VAR_INT);
+                break;
+            }
+            if(compare(word,"float") == 0){
+                r = parse_new(b,scan(b),VAR_FLOAT);
+                break;
+            }
+            if(compare(word,"bool") == 0){
+                r = parse_new(b,scan(b),VAR_BOOL);
+                break;
+            }
+            if(compare(word,"char") == 0){
+                r = parse_new(b,scan(b),VAR_CHAR);
+                break;
+            }
+
+            
+
+
+            if(compare(word,"return") == 0){
+                expr ex = parse_binary(b,0);
+                if(ex.type == b->return_type){
+                    b->return_val = ex;
+                    return 1;
+                }
+                else{
+                    errout("ERROR: Invalid return type.\n");
+                    return -1;
+                }
+                break;
+            }
+        }
+
+        if(next == '='){
+            r = parse_assign(b, get(b,word));
+            break;
+        }
+        //invalid statement
+        errout("ERROR: Invalid expression.\n");
+        return -1;
+    }
+    
 
     return r;
 }
@@ -622,28 +694,41 @@ int parse_statement(code_block* b){
 
     char ch = peek(b);
 
+
     if(ch == '{'){
-        b->brackets++;
-        eat(b);
-        return 0;        
+        return parse_block(b);  
+        //b->brackets++;
+        //eat(b);
+        //return 0;   
     }
     if(ch == '}'){
         b->brackets--;
         eat(b);
         return 0;        
     }
+    if(isalpha(ch)){
+        string word = scan(b);
 
-    int r = parse_expression(b);
-    if(peek(b) == ';'){
-        eat(b);
-        return r;
+        if(compare(word,"if") == 0){
+            return parse_if(b);
+        }
+
+
+        int r = parse_expression(b,word);
+        if(peek(b) == ';'){
+            eat(b);
+            return r;
+        }
+        else{
+            errout("ERROR: Missing Semicolon.\n");
+            return -1;
+        }        
     }
-    else{
-        errout("ERROR: Missing Semicolon.\n");
-        return -1;
-    }
+
 
 }
+
+
 
 void clean_block(code_block *b){
     for (size_t i = 0; i < b->var_count; i++)
@@ -668,6 +753,28 @@ int run(code_block *b){
     }
     clean_block(b);
     return 0;
+}
+
+int parse_block(code_block *b){
+    if(eat(b) != '{'){
+        return -1;
+    }
+    code_block inner;
+    inner.body = b->body;
+    inner.body_index = b->body_index;
+    inner.parent = b;
+    inner.var_count = 0;
+    for (size_t i = 0; i < VAR_COUNT; i++)
+    {
+        inner.variables[i].expr.type = VAR_ERROR;
+    }
+    for (size_t i = 0; i < INDEX_MAX; i++)
+    {
+        inner.funcs.functions[i].return_type = VAR_ERROR;
+    }
+    int r = run(&inner);
+    b->body_index = inner.body_index;
+    return r;
 }
 
 
@@ -713,7 +820,18 @@ int execute(string s, size_t *index){
     code_block b;
     b.body = s;
     b.body_index = *index;
-    b.funcs;
+    b.var_count = 0;
+    for (size_t i = 0; i < VAR_COUNT; i++)
+    {
+        b.variables[i].expr.type = VAR_ERROR;
+    }
+
+    for (size_t i = 0; i < INDEX_MAX; i++)
+    {
+        b.funcs.functions[i].return_type = VAR_ERROR;
+    }
+    
+    b.parent = NULL;
     make_internal(&b.funcs);
     int r = run(&b);
     *index = b.body_index;

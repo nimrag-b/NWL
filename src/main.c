@@ -3,12 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 int main(int argc, char** argv){
-    //string s = to_string("string s = \"Hello\"; string sa = \"World!\"; int val = 5+2*3; out(s + \" \" + sa + val );");
-    //execute(s,0);
+    
+
     if(argc == 1){
         return 0;
     }
-    if(argc == 2){
+    else{
         FILE *f = fopen(argv[1],"r");
         if(f == NULL){
             printf("Failed to open file %s\n",argv[1]);

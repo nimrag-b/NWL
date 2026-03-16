@@ -75,5 +75,7 @@ typedef struct code_block{
     func_table funcs;
     enum var_type return_type;
     expr return_val;
+
+    code_block* parent;
 }code_block;
 

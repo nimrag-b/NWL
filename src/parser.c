@@ -46,6 +46,9 @@ string read_word(openfile* f){
 
 
 int compare(string s, char* other){
+    if(s.length == 0){
+        return -1;
+    }
     for (size_t i = 0; i < s.length; i++)
     {
         if(s.value[i] != other[i]){
@@ -63,7 +66,7 @@ string preproc(string in, char *folder){
 
     while (pre.file_index < pre.file.length){
 
-        while(isspace(pre.file.value[pre.file_index])){
+        while(pre.file_index < pre.file.length && isspace(pre.file.value[pre.file_index])){
             pre.file_index++;
         }
         
@@ -126,7 +129,7 @@ string preproc(string in, char *folder){
             }
         }
 
-        while(pre.file.value[pre.file_index] != '\n'){
+        while(pre.file_index < pre.file.length && pre.file.value[pre.file_index] != '\n'){
             pre.file_index++;
         }
         pre.file_index++;
@@ -166,6 +169,9 @@ void parse_file(string in, char* folder){
                 }
             }
             
+        }
+        else{
+            file.file_index++;
         }
 
 

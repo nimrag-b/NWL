@@ -13,6 +13,15 @@ html{
                 outln(datetime());
 
                 outln("Hello World!");
+
+                if(1){
+                    out("yes");
+                }
+                else{
+                    out("no");
+                }
+
+                out("fin");
             }            
         </p>
 

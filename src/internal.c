@@ -62,8 +62,12 @@ void add_func(func_table* table, func func){
 }
 
 
-func* get_func(func_table* table, string ident){
-    return table->functions + hash_func(ident);
+func* get_func(code_block* b, string ident){
+    func* fn = b->funcs.functions + hash_func(ident);
+    if(fn->return_type == VAR_ERROR){
+        return get_func(b->parent,ident);
+    }
+    return fn;
 }
 
 
