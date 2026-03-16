@@ -149,8 +149,8 @@ void parse_file(string in, char* folder){
         //html block, eat until it finds an open bracket
         if(compare(word,"html") == 0){
 
-            if(file.file.value[file.file_index++] != '{'){ //invalid html block
-                return;
+            if(file.file.value[file.file_index++] != '{'){ //invalid html block, skip
+                continue;
             }
 
             while (file.file.value[file.file_index] != '}' && !eof())

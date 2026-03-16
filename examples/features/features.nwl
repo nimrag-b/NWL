@@ -1,0 +1,43 @@
+This area is untracked, I can put whatever I want in here.
+
+The interpreter only cares about inside html blocks.
+
+html{
+    <!DOCTYPE html>
+    <html lang="en">
+        #include "header.html"
+    <body>
+        <div>
+        <p>
+            #include "test.txt"
+        </p>
+        <p>
+            {
+                string t = "Hello";
+                string ta = "World!";
+                outln(t + ta);
+
+                outln("The current date is " + datetime());
+
+                int x = 3 + 2 * 5;
+                float y = x + 0.351f;
+                outln(y);
+
+                if(1){
+                    outln("yes");
+                }
+                else{
+                    outln("no");
+                }
+                
+                outln('x');
+            }            
+        </p>
+
+        </div>
+    </body>
+
+    </html>    
+}
+
+I can put text here too!

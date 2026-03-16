@@ -129,7 +129,7 @@ expr parse_literal(code_block* b){
                     v = v / 10.0f;
 
                 }
-                
+                d++;
                 f = f + v;
                 if(f > 1){
                     errout("ERROR: Float too large.\n");
